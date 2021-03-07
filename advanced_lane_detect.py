@@ -61,7 +61,6 @@ def color_thresholding(img, threshold=(0,255), opt=("rgb")):
     else:
         return img_in
 
-
 def gradient_thresholding(img, threshold=(0,255), opt=("comb")):
     # read using mpimg as R.G.B
     img_in = np.copy(img)
@@ -124,6 +123,22 @@ def gradient_thresholding(img, threshold=(0,255), opt=("comb")):
 
     else:
         return img_in
+def perspective_img(image, region_rect):
+    img_in = np.copy(image)
+
+    x_len = img_in.shape[1]
+    y_len = img_in.shape[0]
+    
+    src_pts = np.array(region_rect)
+
+    margin=50
+    warp_rect = np.array([[margin, margin] ,[x_len-margin, margin], [x_len-margin, y_len-margin], [margin, y_len-margin]], np.float32)
+    out_pts = np.array(warp_rect)
+
+    M = cv2.getPerspectiveTransform(src_pts, out_pts)
+    warp = cv2.warpPerspective(img_in,M, (x_len, y_len) )
+    
+    return warp
 
 def process_img(image):
     process_img.running_flag += 1
@@ -139,12 +154,14 @@ def process_img(image):
 
     thd_img = np.zeros_like(gradient_comb)
     thd_img[
-        (color ==1) | ((gradient_comb==1) & (gradient_dir==1)) 
+        (color ==1) & ((gradient_comb==1) & (gradient_dir==1)) 
     ]=1
-
-    return thd_img
     
     # step 3: perspective(bird eye)
+    region_rect= np.array([[490, 515], [835, 515], [1080, 650], [265, 650]], np.float32)
+    warp_img = perspective_img(thd_img, region_rect)
+
+    return warp_img
 
     # step 4: Search from Prior
 
