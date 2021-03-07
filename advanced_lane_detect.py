@@ -140,6 +140,82 @@ def perspective_img(image, region_rect):
     
     return warp
 
+def fit_polynomial(img_shape, leftx, lefty, rightx, righty):
+    
+    ploty = np.linspace(0, img_shape[0]-1, img_shape[0])
+
+    try: #2nd order linear model was fitted using np.polyfit
+        left_fit_coef = np.polyfit(lefty,leftx,2)
+        right_fit_coef = np.polyfit(righty, rightx, 2)
+
+        left_fitx= left_fit_coef[0]*ploty**2 + left_fit_coef[1]*ploty + left_fit_coef[2]
+        right_fitx = right_fit_coef[0]*ploty**2 + right_fit_coef[1]*ploty + right_fit_coef[2]
+
+    except TypeError:
+        left_fitx = ploty
+        right_fitx = ploty
+    
+    return left_fitx, right_fitx, ploty
+
+def search_around_poly(binary_warp, init_tune):
+    binary_warped = np.copy(binary_warp)
+
+    margin = 150
+
+    nonzero = binary_warped.nonzero() # nonzero index return!
+    nonzerox = np.array(nonzero[1])
+    nonzeroy = np.array(nonzero[0])
+
+    left_lane_inds = (
+        nonzerox
+        > (
+            init_tune[0][0] * (nonzeroy) ** 2
+            + init_tune[0][1] * nonzeroy
+            + init_tune[0][2]
+            - margin
+        )
+    ) & (
+        nonzerox
+        < (
+            init_tune[0][0] * (nonzeroy) ** 2
+            + init_tune[0][1] * nonzeroy
+            + init_tune[0][2]
+            + margin
+        )
+    )
+
+    right_lane_inds = (
+        nonzerox
+        > (
+            init_tune[1][0] * (nonzeroy) ** 2
+            + init_tune[1][1] * nonzeroy
+            + init_tune[1][2]
+            - margin
+        )
+    ) & (
+        nonzerox
+        < (
+            init_tune[1][0] * (nonzeroy) ** 2
+            + init_tune[1][1] * nonzeroy
+            + init_tune[1][2]
+            + margin
+        )
+    )
+
+    leftx = nonzerox[left_lane_inds]
+    lefty = nonzeroy[left_lane_inds]
+
+    rightx = nonzerox[right_lane_inds]
+    righty = nonzeroy[right_lane_inds]
+
+    left_fitx, right_fitx, ploty = fit_polynomial(binary_warped.shape, leftx, lefty, rightx, righty)
+
+    #VISUALIZATION
+    plt.plot(left_fitx, ploty, color='yellow')
+    plt.plot(right_fitx, ploty, color='blue')
+
+    return binary_warped, left_fitx, right_fitx, ploty
+
 def process_img(image):
     process_img.running_flag += 1
     
@@ -161,9 +237,15 @@ def process_img(image):
     region_rect= np.array([[490, 515], [835, 515], [1080, 650], [265, 650]], np.float32)
     warp_img = perspective_img(thd_img, region_rect)
 
-    return warp_img
 
     # step 4: Search from Prior
+    left_fit = np.array([8.22279110e-05, -8.01574626e-02, 1.80496286e02])
+    right_fit = np.array([9.49537809e-05, -9.58782039e-02, 1.18196061e03])
+    init_tune = np.array([left_fit, right_fit])
+
+    polyfit_img, left_fitx, right_fitx, ploty = search_around_poly(warp_img, init_tune)
+
+    return polyfit_img
 
     # step 5: measure Curvature
 
