@@ -216,10 +216,43 @@ def search_around_poly(binary_warp, init_tune):
 
     return binary_warped, left_fitx, right_fitx, ploty
 
+
+def measure_curvature(image, left_fitx, right_fitx, ploty, ratio=(1,1)):
+
+    # Image x size
+    img_x_size = image.shape[1] 
+
+    left_fit_cr = np.polyfit(ploty * ratio[1], left_fitx * ratio[0], 2)
+    right_fit_cr = np.polyfit(ploty * ratio[1], right_fitx * ratio[0], 2)
+
+    y_eval = np.max(ploty)
+
+    # Calculation of R_curve (radius of curvature)
+    left_curverad = (
+        1 + (2 * left_fit_cr[0] * y_eval * ratio[1] + left_fit_cr[1]) ** 2
+    ) ** 1.5 / np.absolute(2 * left_fit_cr[0])
+    right_curverad = (
+        1 + (2 * right_fit_cr[0] * y_eval * ratio[1] + right_fit_cr[1]) ** 2
+    ) ** 1.5 / np.absolute(2 * right_fit_cr[0])
+
+    mean_curverad = np.mean([left_curverad, right_curverad])
+
+    left_x = (
+        left_fit_cr[0] * (y_eval * ratio[1]) **2 
+        + left_fit_cr[1] * (y_eval * ratio[1])
+        + left_fit_cr[2]
+    )
+    left_of_center = (img_x_size / 2) * ratio[0] - left_x
+
+
+    return left_curverad, right_curverad, mean_curverad, left_of_center
+
+
 def process_img(image):
     process_img.running_flag += 1
     
     img = np.copy(image)
+
     # step 1: undistortion
     undist = cal_undistort(img, objpoints, imgpoints)
     
@@ -237,7 +270,6 @@ def process_img(image):
     region_rect= np.array([[490, 515], [835, 515], [1080, 650], [265, 650]], np.float32)
     warp_img = perspective_img(thd_img, region_rect)
 
-
     # step 4: Search from Prior
     left_fit = np.array([8.22279110e-05, -8.01574626e-02, 1.80496286e02])
     right_fit = np.array([9.49537809e-05, -9.58782039e-02, 1.18196061e03])
@@ -245,12 +277,21 @@ def process_img(image):
 
     polyfit_img, left_fitx, right_fitx, ploty = search_around_poly(warp_img, init_tune)
 
-    return polyfit_img
+    # step 5: measure Curvature.
+    ym_per_pix = 30 / 720  # meters per pixel in y dimension
+    xm_per_pix = 3.7 / 1000  # meters per pixel in x dimension
+    ratio = [xm_per_pix, ym_per_pix]
+    left_curverad, right_curverad, mean_curverad, left_of_center = measure_curvature(polyfit_img, left_fitx, right_fitx, ploty, ratio=ratio)
 
-    # step 5: measure Curvature
+    print("Mean_CurveRad: ", mean_curverad, "Left_of_Center: ", left_of_center)
+
+
 
     # step 6: Inverse Warp
+    # Create an image to draw the lines on
 
+
+    return polyfit_img
     # step 7: Visualization
 
 process_img.running_flag=0
