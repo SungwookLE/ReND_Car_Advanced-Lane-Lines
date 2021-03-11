@@ -3,6 +3,7 @@ import glob
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
+import re
 
 # STEP0. CALIBRATION BOARD BEFORE CAMERA CALIBRATION
 images = glob.glob("camera_cal/calibration*.jpg")
@@ -357,6 +358,12 @@ for fname in images:
     res=process_img(img)
     plt.imshow(res,cmap='gray')
     plt.show()
+    
+    src_string= re.findall('test[0-9].jpg',fname)
+    
+    out_img = "output_images/out_" + src_string[0]
+    plt.imsave(out_img,res)
+
     print(img.shape)
 """
 from moviepy.editor import VideoFileClip
