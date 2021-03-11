@@ -349,7 +349,7 @@ def process_img(image):
     
     return result_img
 
-"""
+
 images = glob.glob("test_images/test*.jpg")
 for fname in images:
     process_img.running_flag=0
@@ -357,8 +357,8 @@ for fname in images:
     res=process_img(img)
     plt.imshow(res,cmap='gray')
     plt.show()
+    print(img.shape)
 """
-
 from moviepy.editor import VideoFileClip
 from IPython.display import HTML
 
@@ -373,4 +373,23 @@ for fname in videos:
 
     img_clip = src_video.fl_image(process_img)
     img_clip.write_videofile(out_video, audio=False)
+"""
+"""
+cap = cv2.VideoCapture(0)
+print(cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
+while(cap.isOpened()):
+        process_img.running_flag = 0
+        process_img.left_right_coeff = np.array([None, None])
+
+        ret, frame = cap.read()
+        frame = cv2.resize(frame, dsize=(1280,720))
+
+        out=process_img(frame)
+        cv2.imshow('out',out)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+cap.release()
+cv2.destroyAllWindows()    
+"""
