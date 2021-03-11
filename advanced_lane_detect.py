@@ -43,6 +43,7 @@ def color_thresholding(img, threshold=(0,255), opt=("rgb")):
         b_channel = rgb[:,:,2]
 
         r_binary = np.zeros_like(r_channel)
+        r_channel = cv2.equalizeHist(r_channel)
         r_binary[(r_channel >= threshold[0]) & (r_channel <= threshold[1])]=1
 
         return r_binary
@@ -54,6 +55,7 @@ def color_thresholding(img, threshold=(0,255), opt=("rgb")):
         s_channel = hls[:,:,2]
 
         s_binary = np.zeros_like(s_channel)
+        s_channel = cv2.equalizeHist(s_channel)
         s_binary[(s_channel >= threshold[0]) & (s_channel <= threshold[1])]=1
 
         return s_binary
@@ -65,6 +67,8 @@ def gradient_thresholding(img, threshold=(0,255), opt=("comb")):
     # read using mpimg as R.G.B
     img_in = np.copy(img)
     gray= cv2.cvtColor(img_in, cv2.COLOR_RGB2GRAY)
+    gray = cv2.equalizeHist(gray)
+
     img_sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1,0, ksize=3)
     img_sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0,1, ksize=3)
 
@@ -118,25 +122,30 @@ def gradient_thresholding(img, threshold=(0,255), opt=("comb")):
         binary_dir[
             (direction >= threshold[0]) & (direction <= threshold[1])
         ]=1
-
         return binary_dir
-
     else:
         return img_in
-def perspective_img(image, region_rect):
+
+def perspective_img(image, region_rect, mode=("normal")):
     img_in = np.copy(image)
 
     x_len = img_in.shape[1]
     y_len = img_in.shape[0]
-    
-    src_pts = np.array(region_rect)
 
-    margin=50
-    warp_rect = np.array([[margin, margin] ,[x_len-margin, margin], [x_len-margin, y_len-margin], [margin, y_len-margin]], np.float32)
-    out_pts = np.array(warp_rect)
+    if (mode == "normal"):
+        src_pts = np.array(region_rect)
+        margin=50
+        warp_rect = np.array([[margin, margin] ,[x_len-margin, margin], [x_len-margin, y_len-margin], [margin, y_len-margin]], np.float32)
+        out_pts = np.array(warp_rect)
+    
+    else: #inverse
+        margin=50
+        warp_rect = np.array([[margin, margin] ,[x_len-margin, margin], [x_len-margin, y_len-margin], [margin, y_len-margin]], np.float32)
+        src_pts = np.array(warp_rect)
+        out_pts = np.array(region_rect)
 
     M = cv2.getPerspectiveTransform(src_pts, out_pts)
-    warp = cv2.warpPerspective(img_in,M, (x_len, y_len) )
+    warp = cv2.warpPerspective(img_in, M, (x_len, y_len))
     
     return warp
 
@@ -154,13 +163,15 @@ def fit_polynomial(img_shape, leftx, lefty, rightx, righty):
     except TypeError:
         left_fitx = ploty
         right_fitx = ploty
+        left_fit_coef = None
+        right_fit_coef = None
     
-    return left_fitx, right_fitx, ploty
+    return left_fitx, right_fitx, ploty, left_fit_coef, right_fit_coef
 
 def search_around_poly(binary_warp, init_tune):
     binary_warped = np.copy(binary_warp)
 
-    margin = 150
+    margin = 100
 
     nonzero = binary_warped.nonzero() # nonzero index return!
     nonzerox = np.array(nonzero[1])
@@ -208,14 +219,14 @@ def search_around_poly(binary_warp, init_tune):
     rightx = nonzerox[right_lane_inds]
     righty = nonzeroy[right_lane_inds]
 
-    left_fitx, right_fitx, ploty = fit_polynomial(binary_warped.shape, leftx, lefty, rightx, righty)
+    left_fitx, right_fitx, ploty,  left_fit_coef, right_fit_coef = fit_polynomial(binary_warped.shape, leftx, lefty, rightx, righty)
+    left_right_coeff = np.array([left_fit_coef, right_fit_coef])
 
-    #VISUALIZATION
-    plt.plot(left_fitx, ploty, color='yellow')
-    plt.plot(right_fitx, ploty, color='blue')
+    ## VISUALIZATION FOR TESTING
+    #plt.plot(left_fitx, ploty, color='yellow')
+    #plt.plot(right_fitx, ploty, color='blue')
 
-    return binary_warped, left_fitx, right_fitx, ploty
-
+    return binary_warped, left_fitx, right_fitx, ploty, left_right_coeff
 
 def measure_curvature(image, left_fitx, right_fitx, ploty, ratio=(1,1)):
 
@@ -247,7 +258,6 @@ def measure_curvature(image, left_fitx, right_fitx, ploty, ratio=(1,1)):
 
     return left_curverad, right_curverad, mean_curverad, left_of_center
 
-
 def process_img(image):
     process_img.running_flag += 1
     
@@ -255,50 +265,112 @@ def process_img(image):
 
     # step 1: undistortion
     undist = cal_undistort(img, objpoints, imgpoints)
-    
+
     # step 2: Thresholding (Color, Gradient, Combination)
-    color = color_thresholding(undist, threshold=(70, 250), opt="hls")
-    gradient_comb = gradient_thresholding(undist,threshold=(20, 100), opt="comb" )
-    gradient_dir = gradient_thresholding(undist,threshold=(0*np.pi/180,60*np.pi/180), opt="dir" )
+    color = color_thresholding(undist, threshold=(55, 255), opt="hls")
+    gradient_comb = gradient_thresholding(undist,threshold=(60, 200), opt="comb" )
+    gradient_dir = gradient_thresholding(undist,threshold=(0*np.pi/180,50*np.pi/180), opt="dir" )
 
     thd_img = np.zeros_like(gradient_comb)
     thd_img[
-        (color ==1) & ((gradient_comb==1) & (gradient_dir==1)) 
+        (color ==1) & ((gradient_comb==1) | (gradient_dir==1)) 
     ]=1
+
     
     # step 3: perspective(bird eye)
-    region_rect= np.array([[490, 515], [835, 515], [1080, 650], [265, 650]], np.float32)
-    warp_img = perspective_img(thd_img, region_rect)
+    region_rect= np.array([[490, 535], [835, 535], [1080, 650], [265, 650]], np.float32)
+
+    ## DEBUG: ROI CHECK
+    #rect_samp = np.array([[490, 515], [835, 515], [1080, 650], [265, 650]], np.int)
+    #cv2.polylines(thd_img, [rect_samp], True, (255,255,255), 10)
+    #return thd_img
+
+    warp_img = perspective_img(thd_img, region_rect, mode="normal")
 
     # step 4: Search from Prior
-    left_fit = np.array([8.22279110e-05, -8.01574626e-02, 1.80496286e02])
-    right_fit = np.array([9.49537809e-05, -9.58782039e-02, 1.18196061e03])
-    init_tune = np.array([left_fit, right_fit])
+    init_left_fit = np.array([8.22279110e-05, -8.01574626e-02, 1.80496286e02])
+    init_right_fit = np.array([9.49537809e-05, -9.58782039e-02, 1.18196061e03])
+    if ( process_img.running_flag < 2 or (process_img.left_right_coeff[0] is None) or (process_img.left_right_coeff[1] is None) ):
+        init_tune = np.array([init_left_fit, init_right_fit])
+    else:
+        if ( np.sum(np.abs(init_left_fit - process_img.left_right_coeff[0])) < 500   ) and ( np.sum(np.abs(init_right_fit - process_img.left_right_coeff[1])) < 600 ):
+            init_tune = process_img.left_right_coeff
+        else:
+            init_tune = np.array([init_left_fit, init_right_fit])
 
-    polyfit_img, left_fitx, right_fitx, ploty = search_around_poly(warp_img, init_tune)
+    polyfit_img, left_fitx, right_fitx, ploty, process_img.left_right_coeff = search_around_poly(warp_img, init_tune)
 
     # step 5: measure Curvature.
     ym_per_pix = 30 / 720  # meters per pixel in y dimension
     xm_per_pix = 3.7 / 1000  # meters per pixel in x dimension
     ratio = [xm_per_pix, ym_per_pix]
     left_curverad, right_curverad, mean_curverad, left_of_center = measure_curvature(polyfit_img, left_fitx, right_fitx, ploty, ratio=ratio)
+    #print("Mean_CurveRad: ", mean_curverad, "Left_of_Center: ", left_of_center)
 
-    print("Mean_CurveRad: ", mean_curverad, "Left_of_Center: ", left_of_center)
-
-
+    str_curv = (
+        "Radius of Curvature = %6d" % mean_curverad
+        + "(m)     Vehicle is %.2f" % left_of_center
+        + "m left of center"
+    )
 
     # step 6: Inverse Warp
     # Create an image to draw the lines on
+    warp_zero = np.zeros_like(polyfit_img).astype(np.uint8)
+    color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
 
+    # Recast the x and y points into usable format for cv2.fillPoly()
+    pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+    pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+    pts = np.hstack((pts_left, pts_right))
 
-    return polyfit_img
+    # Draw the Lane onto the warped blank image
+    cv2.fillPoly(color_warp, np.int_([pts]), (0,255,0))
+    draw_line_left = np.int_(np.column_stack([left_fitx, ploty]))
+    draw_line_right = np.int_(np.column_stack([right_fitx, ploty]))
+    cv2.polylines(color_warp, [draw_line_left], False, (255,0,0), 25)
+    cv2.polylines(color_warp, [draw_line_right], False, (255,0,0), 25)
+
+    # Warp the blank back to original image space using inverse perspective matrix (Minv)
+    Lane_warp_back = perspective_img(color_warp, region_rect, mode="inverse")
+
     # step 7: Visualization
+    # Combine the result with the original image
+    result_img = cv2.addWeighted(undist, 1, Lane_warp_back, 0.5, 0)
+    
+    cv2.putText(
+        result_img,
+        str_curv,
+        (10, 200),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        fontScale=1,
+        color=(0,0,255),
+        thickness=2,
+    )
+    
+    return result_img
 
-process_img.running_flag=0
+"""
 images = glob.glob("test_images/test*.jpg")
-
 for fname in images:
+    process_img.running_flag=0
     img = mpimg.imread(fname)
     res=process_img(img)
     plt.imshow(res,cmap='gray')
     plt.show()
+"""
+
+from moviepy.editor import VideoFileClip
+from IPython.display import HTML
+
+videos = glob.glob("*.mp4")
+for fname in videos:
+    process_img.running_flag = 0
+    process_img.left_right_coeff = np.array([None, None])
+
+    src_string = fname
+    src_video = VideoFileClip(src_string)
+    out_video = "output_videos/out_" + src_string
+
+    img_clip = src_video.fl_image(process_img)
+    img_clip.write_videofile(out_video, audio=False)
+
