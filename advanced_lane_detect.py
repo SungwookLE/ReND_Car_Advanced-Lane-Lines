@@ -308,9 +308,10 @@ def process_img(image):
     left_curverad, right_curverad, mean_curverad, left_of_center = measure_curvature(polyfit_img, left_fitx, right_fitx, ploty, ratio=ratio)
     #print("Mean_CurveRad: ", mean_curverad, "Left_of_Center: ", left_of_center)
 
-    str_curv = (
-        "Radius of Curvature = %6d" % mean_curverad
-        + "(m)     Vehicle is %.2f" % left_of_center
+    str_curv1 = (
+        "Radius of Curvature =%5d" % mean_curverad
+        + "(m)")
+    str_curv2 = ("Vehicle is %.2f" % left_of_center
         + "m left of center"
     )
 
@@ -340,17 +341,26 @@ def process_img(image):
     
     cv2.putText(
         result_img,
-        str_curv,
-        (10, 200),
+        str_curv1,
+        (15, 50),
         cv2.FONT_HERSHEY_SIMPLEX,
-        fontScale=1,
-        color=(0,0,255),
+        fontScale=2,
+        color=(0,255,0),
+        thickness=2,
+    )
+    cv2.putText(
+        result_img,
+        str_curv2,
+        (15, 110),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        fontScale=2,
+        color=(0,255,0),
         thickness=2,
     )
     
     return result_img
 
-
+"""
 images = glob.glob("test_images/test*.jpg")
 for fname in images:
     process_img.running_flag=0
@@ -365,6 +375,7 @@ for fname in images:
     plt.imsave(out_img,res)
 
     print(img.shape)
+"""    
 """
 from moviepy.editor import VideoFileClip
 from IPython.display import HTML
@@ -380,7 +391,6 @@ for fname in videos:
 
     img_clip = src_video.fl_image(process_img)
     img_clip.write_videofile(out_video, audio=False)
-"""
 """
 cap = cv2.VideoCapture(0)
 print(cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -399,4 +409,3 @@ while(cap.isOpened()):
 
 cap.release()
 cv2.destroyAllWindows()    
-"""
