@@ -480,5 +480,7 @@ This is **step 7: Visualization**. It puts the text about curvature anc lateral 
 When I tesing this function to real camera (web-cam). There was latency to process image. For real adaptation of this algorithm, It would be needed code optimization to make it fast working.
 ![gif](./real_web_cam.gif)
 
+![cpature1](./real_output/T1.png)
+![cpature2](./real_output/T2.png)
 
 
